@@ -26,10 +26,13 @@ logging.addLevelName(10000, 'NONE')
 
 
 class Logger(plugin.Plugin):
+    LOAD_PRIORITY = 0
     CONFIG_SPEC = configobj.ConfigObj({
+        'app': 'string(default=$app_name)',
+
         'logger': {
             'level': 'string(default="INFO")',
-            'propagate': 'boolean(default=True)'
+            'propagate': 'boolean(default=False)'
         },
         'handler': {
             'class': 'string(default=None)',
@@ -39,13 +42,13 @@ class Logger(plugin.Plugin):
         }
     }, interpolation=False)
 
-    def __init__(self, name, dist, **config):
-        super(Logger, self).__init__(name, dist, **config)
-        self.config = config
+    def __init__(self, name, dist, app, logger, handler, formatter, **sections):
+        super(Logger, self).__init__(name, dist)
 
-    @staticmethod
-    def configure(app_logger, logger, handler, formatter, **sections):
-        logger_name = 'nagare.application.' + app_logger
+        # Application logger
+        # ------------------
+
+        logger_name = 'nagare.application.' + app
         log.set_logger(logger_name)
 
         if not handler['class']:
@@ -56,11 +59,17 @@ class Logger(plugin.Plugin):
         handlers = {logger_name: dict(handler, formatter=logger_name)}
         formatters = {logger_name: formatter}
 
+        # Other loggers
+        # -------------
+
         for name, config in sections.items():
             if name.startswith('logger_'):
                 name = config.pop('qualname')
                 if name.startswith('.'):
                     name = logger_name + name
+
+                if name == 'root':
+                    name = ''
 
                 config['propagate'] = config.get('propagate', '1') == '1'
 
@@ -76,6 +85,21 @@ class Logger(plugin.Plugin):
             if name.startswith('formatter_'):
                 formatters[name[10:]] = config
 
+        # Root logger
+        # -----------
+
+        root = loggers.get('', {})
+
+        if 'handlers' not in root:
+            root['handlers'] = ['_root_handler']
+
+            handlers['_root_handler'] = {
+                'class': 'logging.StreamHandler',
+                'stream': 'ext://sys.stderr'
+            }
+
+        loggers[''] = root
+
         logging_config = {
             'version': 1,
 
@@ -85,6 +109,3 @@ class Logger(plugin.Plugin):
         }
 
         logging.config.dictConfig(logging_config)
-
-    def handle_start(self, app):
-        self.configure(app.name, **self.config)
