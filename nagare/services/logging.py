@@ -51,6 +51,8 @@ class Logger(plugin.Plugin):
         logger_name = 'nagare.application.' + app
         log.set_logger(logger_name)
 
+        logger['level'] = logger['level'] or 'ERROR'
+
         if not handler['class']:
             handler['class'] = 'logging.StreamHandler'
             handler.setdefault('stream', 'ext://sys.stderr')
