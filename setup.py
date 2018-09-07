@@ -30,10 +30,9 @@ setup(
     url='https://github.com/nagareproject/services-logging',
     packages=find_packages(),
     zip_safe=False,
-    setup_requires=['setuptools_scm', 'pytest-runner'],
+    setup_requires=['setuptools_scm'],
     use_scm_version=True,
-    install_requires=['configobj', 'nagare-services'],
-    tests_require=['pytest'],
+    install_requires=['configobj', 'nagare-services', 'backtrace'],
     entry_points='''
         [nagare.services]
         logging = nagare.services.logging:Logger

@@ -11,18 +11,122 @@ from __future__ import absolute_import
 
 import logging
 import logging.config
+import traceback
+from os import path
 
+import colorama
 import configobj
+import backtrace
 
 from nagare import log
 from nagare.services import plugin
 
+COLORS = {'': ''}
+COLORS.update(colorama.Fore.__dict__)
+COLORS.update(colorama.Style.__dict__)
+
+STYLES = {
+    'nocolors': {
+        'backtrace': '',
+        'error': '',
+        'line': '',
+        'module': '',
+        'context': '',
+        'call': ''
+    },
+    'light': {
+        'backtrace': 'YELLOW',
+        'error': 'RED',
+        'line': 'RED',
+        'module': '',
+        'context': 'GREEN',
+        'call': 'BLUE'
+    },
+    'dark': {
+        'backtrace': 'YELLOW',
+        'error': 'RED',
+        'line': 'RED',
+        'module': '',
+        'context': 'BRIGHT GREEN',
+        'call': 'YELLOW'
+    }
+}
+
+CATEGORIES = [
+    {
+        'call': '%s-> ' + COLORS['BRIGHT']
+    },
+    {
+        'line': 'at line %s',
+        'module': 'File %s',
+        'context': 'in %s',
+        'call': '%s-> ' + COLORS['BRIGHT']
+    }
+]
+
 # -----------------------------------------------------------------------------
+
 
 logging._srcfile = __file__[:-1] if __file__.endswith(('.pyc', '.pyo')) else __file__
 logging.addLevelName(10000, 'NONE')
 
 # -----------------------------------------------------------------------------
+
+
+class ColorizingStreamHandler(logging.StreamHandler):
+    def __init__(self):
+        super(ColorizingStreamHandler, self).__init__()
+
+        self.style = None
+        self.conservative = True
+        self.reverse = self.align = self.keep_path = False
+
+    def set_config(self, style, conservative, reverse, align, keep_path):
+        self.style = style
+        self.conservative = conservative
+        self.reverse = reverse
+        self.align = align
+        self.keep_path = keep_path
+
+    def emit(self, record):
+        isatty = getattr(self.stream, 'isatty', lambda: False)()
+        if not (isatty and record.exc_info and self.style):
+            super(ColorizingStreamHandler, self).emit(record)
+        else:
+            exc_type, exc_value, exc_tb = record.exc_info
+
+            record.exc_info = None
+            super(ColorizingStreamHandler, self).emit(record)
+
+            tb = []
+            for entry in traceback.extract_tb(exc_tb):
+                filename = entry[0].split(path.sep)
+                filename = path.sep.join(filename[-self.keep_path or None:])
+                tb.append((filename,) + entry[1:])
+
+            parser = backtrace._Hook(
+                reversed(tb) if self.reverse else tb,
+                self.align,
+                conservative=self.conservative
+            )
+
+            trace = parser.generate_backtrace(self.style)
+            type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
+            tb_message = self.style['backtrace'].format('Traceback ({0}):'.format(
+                'Most recent call ' + ('first' if self.reverse else 'last')
+            ))
+            err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
+
+            self.stream.write(tb_message + '\n')
+            if self.reverse:
+                self.stream.write(err_message + '\n')
+
+            self.stream.write('\n'.join(line.rstrip() for line in trace) + '\n')
+
+            if not self.reverse:
+                self.stream.write(err_message + '\n')
+
+            self.flush()
 
 
 class Logger(plugin.Plugin):
@@ -39,10 +143,36 @@ class Logger(plugin.Plugin):
         },
         'formatter': {
             'format': 'string(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")'
+        },
+
+        'logger_exceptions': {
+            'qualname': 'string(default="nagare.services.exceptions")',
+            'level': 'string(default="DEBUG")',
+            'handlers': 'string(default="exceptions")',
+            'propagate': 'boolean(default=False)'
+        },
+        'handler_exceptions': {
+            'class': 'string(default="nagare.services.logging.ColorizingStreamHandler")'
+        },
+
+        'exceptions': {
+            'style': 'string(default="nocolors")',
+            'conservative': 'boolean(default=True)',
+            'reverse': 'boolean(default=False)',
+            'align': 'boolean(default=True)',
+            'keep_path': 'integer(default=2)',
+            '__many__': {
+                'backtrace': 'string(default="")',
+                'error': 'string(default="")',
+                'line': 'string(default="")',
+                'module': 'string(default="")',
+                'context': 'string(default="")',
+                'call': 'string(default="")'
+            }
         }
     }, interpolation=False)
 
-    def __init__(self, name, dist, app, logger, handler, formatter, **sections):
+    def __init__(self, name, dist, app, exceptions, logger, handler, formatter, **sections):
         super(Logger, self).__init__(name, dist)
 
         # Application logger
@@ -111,3 +241,25 @@ class Logger(plugin.Plugin):
         }
 
         logging.config.dictConfig(logging_config)
+
+        # Colorized exceptions
+        # --------------------
+
+        handlers = logging.getLogger('nagare.services.exceptions').handlers
+        if len(handlers) == 1:
+            handler = handlers[0]
+            if isinstance(handler, ColorizingStreamHandler):
+                self.configure_handler(handler, **exceptions)
+
+        colorama.init(autoreset=True)
+
+    @staticmethod
+    def configure_handler(handler, style, conservative, reverse, align, keep_path, **styles):
+        style = (styles.get(style) or STYLES.get(style, {})).copy()
+
+        if style:
+            for category, colors in style.items():
+                color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
+                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
+
+            handler.set_config(style, conservative, reverse, align, keep_path)
