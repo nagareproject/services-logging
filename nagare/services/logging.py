@@ -74,14 +74,9 @@ logging.addLevelName(10000, 'NONE')
 
 
 class ColorizingStreamHandler(logging.StreamHandler):
-    def __init__(self):
+    def __init__(self, style='nocolors', conservative=True, reverse=False, align=True, keep_path=2):
         super(ColorizingStreamHandler, self).__init__()
 
-        self.style = None
-        self.conservative = True
-        self.reverse = self.align = self.keep_path = False
-
-    def set_config(self, style, conservative, reverse, align, keep_path):
         self.style = style
         self.conservative = conservative
         self.reverse = reverse
@@ -148,15 +143,11 @@ class Logger(plugin.Plugin):
         'logger_exceptions': {
             'qualname': 'string(default="nagare.services.exceptions")',
             'level': 'string(default="DEBUG")',
-            'handlers': 'string(default="exceptions")',
             'propagate': 'boolean(default=False)'
-        },
-        'handler_exceptions': {
-            'class': 'string(default="nagare.services.logging.ColorizingStreamHandler")'
         },
 
         'exceptions': {
-            'style': 'string(default="nocolors")',
+            'style': 'string(default=None)',
             'conservative': 'boolean(default=True)',
             'reverse': 'boolean(default=False)',
             'align': 'boolean(default=True)',
@@ -245,21 +236,23 @@ class Logger(plugin.Plugin):
         # Colorized exceptions
         # --------------------
 
-        handlers = logging.getLogger('nagare.services.exceptions').handlers
-        if len(handlers) == 1:
-            handler = handlers[0]
-            if isinstance(handler, ColorizingStreamHandler):
-                self.configure_handler(handler, **exceptions)
-
-        colorama.init(autoreset=True)
+        handler = self.create_exception_handler(**exceptions)
+        if handler is not None:
+            logging.getLogger('nagare.services.exceptions').addHandler(handler)
 
     @staticmethod
-    def configure_handler(handler, style, conservative, reverse, align, keep_path, **styles):
+    def create_exception_handler(style, conservative, reverse, align, keep_path, **styles):
         style = (styles.get(style) or STYLES.get(style, {})).copy()
 
-        if style:
-            for category, colors in style.items():
-                color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
-                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
+        if not style:
+            handler = None
+        else:
+            colorama.init(autoreset=True)
 
-            handler.set_config(style, conservative, reverse, align, keep_path)
+            for category, colors in style.items():
+                    color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
+                    style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
+
+            handler = ColorizingStreamHandler(style, conservative, reverse, align, keep_path)
+
+        return handler
