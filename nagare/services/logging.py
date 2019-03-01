@@ -250,8 +250,8 @@ class Logger(plugin.Plugin):
             colorama.init(autoreset=True)
 
             for category, colors in style.items():
-                    color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
-                    style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
+                color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
+                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
 
             handler = ColorizingStreamHandler(style, conservative, reverse, align, keep_path)
 
