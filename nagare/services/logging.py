@@ -74,10 +74,11 @@ logging.addLevelName(10000, 'NONE')
 
 
 class ColorizingStreamHandler(logging.StreamHandler):
-    def __init__(self, style='nocolors', conservative=True, reverse=False, align=True, keep_path=2):
+    def __init__(self, style='nocolors', simplified=True, conservative=True, reverse=False, align=True, keep_path=2):
         super(ColorizingStreamHandler, self).__init__()
 
         self.style = style
+        self.simplified = simplified
         self.conservative = conservative
         self.reverse = reverse
         self.align = align
@@ -93,8 +94,18 @@ class ColorizingStreamHandler(logging.StreamHandler):
             record.exc_info = None
             super(ColorizingStreamHandler, self).emit(record)
 
+            tb = last_chain_seen = exc_tb
+            while self.simplified and tb:
+                func_name = tb.tb_frame.f_code.co_name
+                tb = tb.tb_next
+                if (tb is not None) and (func_name == 'handle_request'):
+                    last_chain_seen = tb
+
+            if not last_chain_seen:
+                last_chain_seen = exc_tb
+
             tb = []
-            for entry in traceback.extract_tb(exc_tb):
+            for entry in traceback.extract_tb(last_chain_seen):
                 filename = entry[0].split(path.sep)
                 filename = path.sep.join(filename[-self.keep_path or None:])
                 tb.append((filename,) + entry[1:])
@@ -107,7 +118,7 @@ class ColorizingStreamHandler(logging.StreamHandler):
 
             trace = parser.generate_backtrace(self.style)
             type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
-            tb_message = self.style['backtrace'].format('Traceback ({0}):'.format(
+            tb_message = self.style['backtrace'].format('Traceback ({}):'.format(
                 'Most recent call ' + ('first' if self.reverse else 'last')
             ))
             err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
@@ -127,7 +138,7 @@ class ColorizingStreamHandler(logging.StreamHandler):
 class Logger(plugin.Plugin):
     LOAD_PRIORITY = 0
     CONFIG_SPEC = configobj.ConfigObj({
-        'app': 'string(default=$app_name)',
+        '_app_name': 'string(default=$app_name)',
 
         'logger': {
             'level': 'string(default="INFO")',
@@ -147,7 +158,8 @@ class Logger(plugin.Plugin):
         },
 
         'exceptions': {
-            'style': 'string(default=None)',
+            'style': 'string(default=nocolors)',
+            'simplified': 'boolean(default=True)',
             'conservative': 'boolean(default=True)',
             'reverse': 'boolean(default=False)',
             'align': 'boolean(default=True)',
@@ -163,13 +175,13 @@ class Logger(plugin.Plugin):
         }
     }, interpolation=False)
 
-    def __init__(self, name, dist, app, exceptions, logger, handler, formatter, **sections):
+    def __init__(self, name, dist, _app_name, exceptions, logger, handler, formatter, **sections):
         super(Logger, self).__init__(name, dist)
 
         # Application logger
         # ------------------
 
-        logger_name = 'nagare.application.' + app
+        logger_name = 'nagare.application.' + _app_name
         log.set_logger(logger_name)
 
         logger['level'] = logger['level'] or 'ERROR'
@@ -241,7 +253,7 @@ class Logger(plugin.Plugin):
             logging.getLogger('nagare.services.exceptions').addHandler(handler)
 
     @staticmethod
-    def create_exception_handler(style, conservative, reverse, align, keep_path, **styles):
+    def create_exception_handler(style, simplified, conservative, reverse, align, keep_path, **styles):
         style = (styles.get(style) or STYLES.get(style, {})).copy()
 
         if not style:
@@ -251,8 +263,8 @@ class Logger(plugin.Plugin):
 
             for category, colors in style.items():
                 color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
-                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{0}'
+                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
 
-            handler = ColorizingStreamHandler(style, conservative, reverse, align, keep_path)
+            handler = ColorizingStreamHandler(style, simplified, conservative, reverse, align, keep_path)
 
         return handler
