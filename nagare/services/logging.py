@@ -224,6 +224,7 @@ class Logger(plugin.Plugin):
         # -----------
 
         root = loggers.get('', {})
+        root.setdefault('level', 'INFO')
 
         if 'handlers' not in root:
             root['handlers'] = ['_root_handler']
