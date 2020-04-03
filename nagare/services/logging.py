@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2019 Net-ng.
+# Copyright (c) 2008-2020 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -176,7 +176,11 @@ class Logger(plugin.Plugin):
     }, interpolation=False)
 
     def __init__(self, name, dist, _app_name, exceptions, logger, handler, formatter, **sections):
-        super(Logger, self).__init__(name, dist)
+        super(Logger, self).__init__(
+            name, dist,
+            exceptions=exceptions, logger=logger, handler=handler, formatter=formatter,
+            **sections
+        )
 
         # Application logger
         # ------------------
