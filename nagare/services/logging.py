@@ -235,7 +235,12 @@ class Logger(plugin.Plugin):
 
             handlers['_root_handler'] = {
                 'class': 'logging.StreamHandler',
-                'stream': 'ext://sys.stderr'
+                'stream': 'ext://sys.stderr',
+                'formatter': '_root_formatter'
+            }
+
+            formatters['_root_formatter'] = {
+                'format': '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
             }
 
         loggers[''] = root
