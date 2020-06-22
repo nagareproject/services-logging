@@ -135,6 +135,20 @@ class ColorizingStreamHandler(logging.StreamHandler):
             self.flush()
 
 
+class DictConfigurator(logging.config.dictConfigClass):
+    def __init__(self):
+        pass
+
+    def create_handler(self, args='()', **kw):
+        cls = self.resolve(kw.pop('class'))
+
+        return cls(**kw) if kw else cls(*eval(args))
+
+    def configure(self, config):
+        super(DictConfigurator, self).__init__(config)
+        super(DictConfigurator, self).configure()
+
+
 class Logger(plugin.Plugin):
     LOAD_PRIORITY = 0
     CONFIG_SPEC = configobj.ConfigObj({
@@ -182,6 +196,8 @@ class Logger(plugin.Plugin):
             **sections
         )
 
+        configurator = DictConfigurator()
+
         # Application logger
         # ------------------
 
@@ -193,6 +209,8 @@ class Logger(plugin.Plugin):
         if not handler['class']:
             handler['class'] = 'logging.StreamHandler'
             handler.setdefault('stream', 'ext://sys.stderr')
+
+        handler['()'] = configurator.create_handler
 
         loggers = {logger_name: dict(logger, handlers=[logger_name])}
         handlers = {logger_name: dict(handler, formatter=logger_name)}
@@ -220,6 +238,7 @@ class Logger(plugin.Plugin):
 
             if name.startswith('handler_'):
                 handlers[name[8:]] = config
+                handlers[name[8:]]['()'] = configurator.create_handler
 
             if name.startswith('formatter_'):
                 formatters[name[10:]] = config
@@ -253,7 +272,7 @@ class Logger(plugin.Plugin):
             'formatters': formatters
         }
 
-        logging.config.dictConfig(logging_config)
+        configurator.configure(logging_config)
 
         # Colorized exceptions
         # --------------------
