@@ -16,10 +16,9 @@ from os import path
 
 import colorama
 import configobj
-import backtrace
 
 from nagare import log
-from nagare.services import plugin
+from nagare.services import plugin, backtrace
 
 COLORS = {'': ''}
 COLORS.update(colorama.Fore.__dict__)

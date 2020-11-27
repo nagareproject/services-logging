@@ -32,7 +32,7 @@ setup(
     zip_safe=False,
     setup_requires=['setuptools_scm'],
     use_scm_version=True,
-    install_requires=['configobj', 'nagare-services', 'backtrace'],
+    install_requires=['colorama', 'configobj', 'nagare-services'],
     entry_points='''
         [nagare.services]
         logging = nagare.services.logging:Logger
