@@ -258,7 +258,7 @@ class Logger(plugin.Plugin):
             }
 
             formatters['_root_formatter'] = {
-                'format': '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
             }
 
         loggers[''] = root
