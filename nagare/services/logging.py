@@ -141,6 +141,17 @@ class DictConfigurator(logging.config.dictConfigClass):
     def create_handler(self, args='()', **kw):
         cls = self.resolve(kw.pop('class'))
 
+        # Special case for handler which refers to another handler
+        # (see `logging.config.DictConfigurator.configure_handler`)
+        if issubclass(cls, logging.handlers.SMTPHandler) and ('mailhost' in kw):
+            mailhost = kw['mailhost']
+            if isinstance(mailhost, (list, tuple)):
+                kw['mailhost'] = (mailhost[0], int(mailhost[1]))
+        elif issubclass(cls, logging.handlers.SysLogHandler) and ('address' in kw):
+            address = kw['address']
+            if isinstance(address, (list, tuple)):
+                kw['address'] = (address[0], int(address[1]))
+
         return cls(**kw) if kw else cls(*eval(args))
 
     def configure(self, config):
