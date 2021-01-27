@@ -13,6 +13,7 @@ import logging
 import logging.config
 import traceback
 from os import path
+from collections import OrderedDict
 
 import colorama
 import configobj
@@ -161,27 +162,28 @@ class DictConfigurator(logging.config.dictConfigClass):
 
 class Logger(plugin.Plugin):
     LOAD_PRIORITY = 0
-    CONFIG_SPEC = configobj.ConfigObj({
-        '_app_name': 'string(default=$app_name)',
+    CONFIG_SPEC = configobj.ConfigObj(dict(
+        plugin.Plugin.CONFIG_SPEC,
+        _app_name='string(default=$app_name)',
 
-        'logger': {
+        logger={
             'level': 'string(default="INFO")',
             'propagate': 'boolean(default=False)'
         },
-        'handler': {
+        handler={
             'class': 'string(default=None)',
         },
-        'formatter': {
+        formatter={
             'format': 'string(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")'
         },
 
-        'logger_exceptions': {
+        logger_exceptions={
             'qualname': 'string(default="nagare.services.exceptions")',
             'level': 'string(default="DEBUG")',
             'propagate': 'boolean(default=False)'
         },
 
-        'exceptions': {
+        exceptions={
             'style': 'string(default=nocolors)',
             'simplified': 'boolean(default=True)',
             'conservative': 'boolean(default=True)',
@@ -197,7 +199,11 @@ class Logger(plugin.Plugin):
                 'call': 'string(default="")'
             }
         }
-    }, interpolation=False)
+    ), interpolation=False)
+
+    @classmethod
+    def get_plugin_spec(cls):
+        return OrderedDict(sorted(cls.CONFIG_SPEC.dict().items()))
 
     def __init__(self, name, dist, _app_name, exceptions, logger, handler, formatter, **sections):
         super(Logger, self).__init__(
