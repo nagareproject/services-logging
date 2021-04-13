@@ -17,6 +17,7 @@ from collections import OrderedDict
 
 import colorama
 import configobj
+from chromalog import ColorizingStreamHandler, colorizer
 
 from nagare import log
 from nagare.services import plugin, backtrace
@@ -24,31 +25,48 @@ from nagare.services import plugin, backtrace
 COLORS = {'': ''}
 COLORS.update(colorama.Fore.__dict__)
 COLORS.update(colorama.Style.__dict__)
+COLORS.update({'BACK_' + color_name: color for color_name, color in colorama.Back.__dict__.items()})
 
 STYLES = {
     'nocolors': {
-        'backtrace': '',
-        'error': '',
-        'line': '',
-        'module': '',
-        'context': '',
-        'call': ''
+        'debug': [],
+        'info': [],
+        'warning': [],
+        'error': [],
+        'critical': [],
+
+        'backtrace': [],
+        'line': [],
+        'module': [],
+        'context': [],
+        'call': []
     },
     'light': {
-        'backtrace': 'YELLOW',
-        'error': 'RED',
-        'line': 'RED',
-        'module': '',
-        'context': 'GREEN',
-        'call': 'BLUE'
+        'debug': ['CYAN'],
+        'info': [],
+        'warning': ['YELLOW'],
+        'error': ['RED'],
+        'critical': ['BACK_RED'],
+
+        'backtrace': ['YELLOW'],
+        'line': ['RED'],
+        'module': [],
+        'context': ['GREEN'],
+        'call': ['BLUE'],
+
     },
     'dark': {
-        'backtrace': 'YELLOW',
-        'error': 'RED',
-        'line': 'RED',
-        'module': '',
-        'context': 'BRIGHT GREEN',
-        'call': 'YELLOW'
+        'debug': ['CYAN'],
+        'info': [],
+        'warning': ['YELLOW'],
+        'error': ['RED'],
+        'critical': ['BACK_RED'],
+
+        'backtrace': ['YELLOW'],
+        'line': ['RED'],
+        'module': [],
+        'context': ['BRIGHT', 'GREEN'],
+        'call': ['YELLOW']
     }
 }
 
@@ -73,9 +91,9 @@ logging.addLevelName(10000, 'NONE')
 # -----------------------------------------------------------------------------
 
 
-class ColorizingStreamHandler(logging.StreamHandler):
+class ColorizingExceptionHandler(logging.StreamHandler):
     def __init__(self, style='nocolors', simplified=True, conservative=True, reverse=False, align=True, keep_path=2):
-        super(ColorizingStreamHandler, self).__init__()
+        super(ColorizingExceptionHandler, self).__init__()
 
         self.style = style
         self.simplified = simplified
@@ -87,12 +105,12 @@ class ColorizingStreamHandler(logging.StreamHandler):
     def emit(self, record):
         isatty = getattr(self.stream, 'isatty', lambda: False)()
         if not (isatty and record.exc_info and self.style):
-            super(ColorizingStreamHandler, self).emit(record)
+            super(ColorizingExceptionHandler, self).emit(record)
         else:
             exc_type, exc_value, exc_tb = record.exc_info
 
             record.exc_info = None
-            super(ColorizingStreamHandler, self).emit(record)
+            super(ColorizingExceptionHandler, self).emit(record)
 
             tb = last_chain_seen = exc_tb
             while self.simplified and tb:
@@ -166,6 +184,23 @@ class Logger(plugin.Plugin):
         plugin.Plugin.CONFIG_SPEC,
         _app_name='string(default=$app_name)',
 
+        style='string(default=nocolors)',
+        styles={
+            '__many__': {
+                'debug': 'list(default=list)',
+                'info': 'list(default=list)',
+                'warning': 'list(default=list)',
+                'error': 'list(default=list)',
+                'critical': 'list(default=list)',
+
+                'backtrace': 'list(default=list)',
+                'line': 'list(default=list)',
+                'module': 'list(default=list)',
+                'context': 'list(default=list)',
+                'call': 'list(default=list)'
+            }
+        },
+
         logger={
             'level': 'string(default="INFO")',
             'propagate': 'boolean(default=False)'
@@ -184,20 +219,11 @@ class Logger(plugin.Plugin):
         },
 
         exceptions={
-            'style': 'string(default=nocolors)',
             'simplified': 'boolean(default=True)',
             'conservative': 'boolean(default=True)',
             'reverse': 'boolean(default=False)',
             'align': 'boolean(default=True)',
-            'keep_path': 'integer(default=2)',
-            '__many__': {
-                'backtrace': 'string(default="")',
-                'error': 'string(default="")',
-                'line': 'string(default="")',
-                'module': 'string(default="")',
-                'context': 'string(default="")',
-                'call': 'string(default="")'
-            }
+            'keep_path': 'integer(default=2)'
         }
     ), interpolation=False)
 
@@ -205,12 +231,26 @@ class Logger(plugin.Plugin):
     def get_plugin_spec(cls):
         return OrderedDict(sorted(cls.CONFIG_SPEC.dict().items()))
 
-    def __init__(self, name, dist, _app_name, exceptions, logger, handler, formatter, **sections):
+    def __init__(
+            self,
+            name, dist,
+            _app_name,
+            style, styles,
+            logger, handler, formatter,
+            exceptions,
+            **sections
+    ):
         super(Logger, self).__init__(
             name, dist,
-            exceptions=exceptions, logger=logger, handler=handler, formatter=formatter,
+            style=style, styles=styles,
+            logger=logger, handler=handler, formatter=formatter,
+            exceptions=exceptions,
             **sections
         )
+        colorama.init(autoreset=True)
+
+        colors = (styles.get(style) or STYLES.get(style) or STYLES['nocolors']).copy()
+        colors = {name: ''.join(COLORS.get(c.upper(), '') for c in color) for name, color in colors.items()}
 
         configurator = DictConfigurator()
 
@@ -269,12 +309,18 @@ class Logger(plugin.Plugin):
             root['handlers'] = ['_root_handler']
 
             handlers['_root_handler'] = {
-                'class': 'logging.StreamHandler',
                 'stream': 'ext://sys.stderr',
-                'formatter': '_root_formatter'
+                'formatter': '_root_formatter',
+                '()': lambda stream: ColorizingStreamHandler(
+                    stream,
+                    colorizer.GenericColorizer(
+                        {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
+                    )
+                )
             }
 
             formatters['_root_formatter'] = {
+                'class': 'chromalog.ColorizingFormatter',
                 'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
             }
 
@@ -293,23 +339,17 @@ class Logger(plugin.Plugin):
         # Colorized exceptions
         # --------------------
 
-        handler = self.create_exception_handler(**exceptions)
-        if handler is not None:
-            logging.getLogger('nagare.services.exceptions').addHandler(handler)
+        exception_logger = logging.getLogger('nagare.services.exceptions')
+        if style and not exception_logger.handlers:
+            handler = self.create_exception_handler(colors, **exceptions)
+            exception_logger.addHandler(handler)
 
     @staticmethod
-    def create_exception_handler(style, simplified, conservative, reverse, align, keep_path, **styles):
-        style = (styles.get(style) or STYLES.get(style, {})).copy()
+    def create_exception_handler(colors, simplified, conservative, reverse, align, keep_path, **styles):
+        colors = {
+            category: (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
+            for category, color
+            in colors.items()
+        }
 
-        if not style:
-            handler = None
-        else:
-            colorama.init(autoreset=True)
-
-            for category, colors in style.items():
-                color = ''.join(COLORS.get(color.upper(), '') for color in colors.split())
-                style[category] = (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
-
-            handler = ColorizingStreamHandler(style, simplified, conservative, reverse, align, keep_path)
-
-        return handler
+        return ColorizingExceptionHandler(colors, simplified, conservative, reverse, align, keep_path)
