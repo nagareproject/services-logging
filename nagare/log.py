@@ -18,14 +18,15 @@ def set_logger(name):
     logger_name = name
 
 
-def get_logger(name=None):
+def get_logger(name=None, parent_logger=None):
     global logger_name
 
     if name is None:
         name = '.'
 
     if name.startswith('.'):
-        name = (logger_name + name) if logger_name else 'nagare.application'
+        parent_name = logger_name if parent_logger is None else parent_logger.name
+        name = (parent_name + name) if parent_name else 'nagare.application'
 
     return logging.getLogger(name.rstrip('.'))
 
