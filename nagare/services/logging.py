@@ -184,14 +184,14 @@ class Logger(plugin.Plugin):
         plugin.Plugin.CONFIG_SPEC,
         _app_name='string(default=$app_name)',
 
-        style='string(default=nocolors)',
+        style='string(default=nocolors, help="color theme")',
         styles={
             '__many__': {
-                'debug': 'list(default=list)',
-                'info': 'list(default=list)',
-                'warning': 'list(default=list)',
-                'error': 'list(default=list)',
-                'critical': 'list(default=list)',
+                'debug': 'list(default=list, help="color for the ``debug`` level log messages")',
+                'info': 'list(default=list, help="color for the ``info`` level log messages")',
+                'warning': 'list(default=list, help="color for the ``warning`` level log messages")',
+                'error': 'list(default=list, help="color for the ``error`` level log messages")',
+                'critical': 'list(default=list, help="color for the ``critical`` level log messages")',
 
                 'backtrace': 'list(default=list)',
                 'line': 'list(default=list)',
@@ -202,14 +202,14 @@ class Logger(plugin.Plugin):
         },
 
         logger={
-            'level': 'string(default="INFO")',
+            'level': 'string(default="INFO", help="log level of the default application logger")',
             'propagate': 'boolean(default=False)'
         },
         handler={
-            'class': 'string(default=None)',
+            'class': 'string(default=None, help="handler class of the default application logger. If not set, the logs are sent to the ``stderr`` output stream")',
         },
         formatter={
-            'format': 'string(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")'
+            'format': 'string(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s", help="log format of the default application logger")'
         },
 
         logger_exceptions={
@@ -219,11 +219,11 @@ class Logger(plugin.Plugin):
         },
 
         exceptions={
-            'simplified': 'boolean(default=True)',
-            'conservative': 'boolean(default=True)',
-            'reverse': 'boolean(default=False)',
-            'align': 'boolean(default=True)',
-            'keep_path': 'integer(default=2)'
+            'simplified': 'boolean(default=True, help="Don\'t display the first Nagare internal call frames")',
+            'conservative': 'boolean(default=True, help="")',
+            'reverse': 'boolean(default=False, help="Display the call frames in reverse order (last called frame fist)")',
+            'align': 'boolean(default=True, help="align the fields of the call frames")',
+            'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")'
         }
     ), interpolation=False)
 
@@ -262,11 +262,23 @@ class Logger(plugin.Plugin):
 
         logger['level'] = logger['level'] or 'ERROR'
 
-        if not handler['class']:
-            handler['class'] = 'logging.StreamHandler'
+        if handler['class']:
+            handler['()'] = configurator.create_handler
+        else:
             handler.setdefault('stream', 'ext://sys.stderr')
 
-        handler['()'] = configurator.create_handler
+            if 'class' not in formatter:
+                del handler['class']
+                handler['()'] = lambda stream: ColorizingStreamHandler(
+                    stream,
+                    colorizer.GenericColorizer(
+                        {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
+                    )
+                )
+
+                formatter['class'] = 'chromalog.ColorizingFormatter'
+            else:
+                handler['class'] = 'logging.StreamHandler'
 
         loggers = {logger_name: dict(logger, handlers=[logger_name])}
         handlers = {logger_name: dict(handler, formatter=logger_name)}
