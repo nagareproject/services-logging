@@ -13,10 +13,8 @@ import logging
 import logging.config
 import traceback
 from os import path
-from collections import OrderedDict
 
 import colorama
-import configobj
 from chromalog import ColorizingStreamHandler, colorizer
 
 from nagare import log
@@ -180,24 +178,24 @@ class DictConfigurator(logging.config.dictConfigClass):
 
 class Logger(plugin.Plugin):
     LOAD_PRIORITY = 0
-    CONFIG_SPEC = configobj.ConfigObj(dict(
+    CONFIG_SPEC = dict(
         plugin.Plugin.CONFIG_SPEC,
-        _app_name='string(default=$app_name)',
+        _app_name='string(default="$app_name")',
 
         style='string(default=nocolors, help="color theme")',
         styles={
             '__many__': {
-                'debug': 'list(default=list, help="color for the ``debug`` level log messages")',
-                'info': 'list(default=list, help="color for the ``info`` level log messages")',
-                'warning': 'list(default=list, help="color for the ``warning`` level log messages")',
-                'error': 'list(default=list, help="color for the ``error`` level log messages")',
-                'critical': 'list(default=list, help="color for the ``critical`` level log messages")',
+                'debug': 'string_list(default=list(), help="color for the ``debug`` level log messages")',
+                'info': 'string_list(default=list(), help="color for the ``info`` level log messages")',
+                'warning': 'string_list(default=list(), help="color for the ``warning`` level log messages")',
+                'error': 'string_list(default=list(), help="color for the ``error`` level log messages")',
+                'critical': 'string_list(default=list(), help="color for the ``critical`` level log messages")',
 
-                'backtrace': 'list(default=list)',
-                'line': 'list(default=list)',
-                'module': 'list(default=list)',
-                'context': 'list(default=list)',
-                'call': 'list(default=list)'
+                'backtrace': 'string_list(default=list())',
+                'line': 'string_list(default=list())',
+                'module': 'string_list(default=list())',
+                'context': 'string_list(default=list())',
+                'call': 'string_list(default=list())'
             }
         },
 
@@ -225,11 +223,7 @@ class Logger(plugin.Plugin):
             'align': 'boolean(default=True, help="align the fields of the call frames")',
             'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")'
         }
-    ), interpolation=False)
-
-    @classmethod
-    def get_plugin_spec(cls):
-        return OrderedDict(sorted(cls.CONFIG_SPEC.dict().items()))
+    )
 
     def __init__(
             self,
