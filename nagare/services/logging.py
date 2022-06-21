@@ -9,13 +9,15 @@
 
 from __future__ import absolute_import
 
+import sys
 import logging
 import logging.config
 import traceback
 from os import path
 
 import colorama
-from chromalog import ColorizingStreamHandler, colorizer
+import chromalog
+from chromalog import ColorizingFormatter  # noqa: F401
 
 from nagare import log
 from nagare.services import plugin, backtrace
@@ -40,31 +42,31 @@ STYLES = {
         'call': []
     },
     'light': {
-        'debug': ['CYAN'],
+        'debug': ['GREEN'],
         'info': [],
         'warning': ['YELLOW'],
-        'error': ['RED'],
-        'critical': ['BACK_RED'],
+        'error': ['BRIGHT', 'RED'],
+        'critical': ['BACK_RED', 'BRIGHT', 'WHITE'],
 
         'backtrace': ['YELLOW'],
-        'line': ['RED'],
+        'line': ['YELLOW'],
         'module': [],
         'context': ['GREEN'],
-        'call': ['BLUE'],
+        'call': [],
 
     },
     'dark': {
-        'debug': ['CYAN'],
+        'debug': ['DIM', 'GREEN'],
         'info': [],
-        'warning': ['YELLOW'],
+        'warning': ['DIM', 'YELLOW'],
         'error': ['RED'],
-        'critical': ['BACK_RED'],
+        'critical': ['BACK_RED', 'WHITE'],
 
         'backtrace': ['YELLOW'],
-        'line': ['RED'],
+        'line': ['YELLOW'],
         'module': [],
-        'context': ['BRIGHT', 'GREEN'],
-        'call': ['YELLOW']
+        'context': ['GREEN'],
+        'call': []
     }
 }
 
@@ -73,6 +75,8 @@ CATEGORIES = [
         'call': '%s-> ' + COLORS['BRIGHT']
     },
     {
+        'backtrace': '%s',
+        'error': '%s',
         'line': 'at line %s',
         'module': 'File %s',
         'context': 'in %s',
@@ -80,35 +84,60 @@ CATEGORIES = [
     }
 ]
 
+DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
 # -----------------------------------------------------------------------------
 
 
 logging._srcfile = __file__[:-1] if __file__.endswith(('.pyc', '.pyo')) else __file__
 logging.addLevelName(10000, 'NONE')
 
+DefaultColorizingStreamHandler = None
+
 # -----------------------------------------------------------------------------
 
 
-class ColorizingExceptionHandler(logging.StreamHandler):
-    def __init__(self, style='nocolors', simplified=True, conservative=True, reverse=False, align=True, keep_path=2):
-        super(ColorizingExceptionHandler, self).__init__()
+class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
 
-        self.style = style
+    def __init__(
+        self,
+        stream=sys.stderr,
+        colors=None,
+        simplified=True, conservative=True, reverse=False, align=True, keep_path=2
+    ):
+        colors = colors or {}
+
+        super(ColorizingStreamHandler, self).__init__(
+            stream,
+            chromalog.colorizer.MonochromaticColorizer({
+                name: (color, COLORS['RESET_ALL'])
+                for name, color
+                in colors.items()
+            })
+        )
+
         self.simplified = simplified
         self.conservative = conservative
         self.reverse = reverse
         self.align = align
         self.keep_path = keep_path
 
+        self.style = {
+            category: (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
+            for category, color
+            in colors.items()
+            if category in CATEGORIES[1]
+        }
+
     def emit(self, record):
         isatty = getattr(self.stream, 'isatty', lambda: False)()
         if not (isatty and record.exc_info and self.style):
-            super(ColorizingExceptionHandler, self).emit(record)
+            super(ColorizingStreamHandler, self).emit(record)
         else:
             exc_type, exc_value, exc_tb = record.exc_info
 
             record.exc_info = None
-            super(ColorizingExceptionHandler, self).emit(record)
+            super(ColorizingStreamHandler, self).emit(record)
 
             tb = last_chain_seen = exc_tb
             while self.simplified and tb:
@@ -133,6 +162,7 @@ class ColorizingExceptionHandler(logging.StreamHandler):
             )
 
             trace = parser.generate_backtrace(self.style)
+
             type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
             tb_message = self.style['backtrace'].format('Traceback ({}):'.format(
                 'Most recent call ' + ('first' if self.reverse else 'last')
@@ -149,6 +179,16 @@ class ColorizingExceptionHandler(logging.StreamHandler):
                 self.stream.write(err_message + '\n')
 
             self.flush()
+
+
+class DefaultColorizingStreamHandler:
+    CONFIG = {}
+
+    def __new__(cls, *args, **kw):
+        config = cls.CONFIG.copy()
+        config.update(kw)
+
+        return ColorizingStreamHandler(*args, **config)
 
 
 class DictConfigurator(logging.config.dictConfigClass):
@@ -199,29 +239,52 @@ class Logger(plugin.Plugin):
             }
         },
 
-        logger={
-            'level': 'string(default="INFO", help="log level of the default application logger")',
-            'propagate': 'boolean(default=False)'
-        },
-        handler={
-            'class': 'string(default=None, help="handler class of the default application logger. If not set, the logs are sent to the ``stderr`` output stream")',
-        },
-        formatter={
-            'format': 'string(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s", help="log format of the default application logger")'
-        },
-
-        logger_exceptions={
-            'qualname': 'string(default="nagare.services.exceptions")',
-            'level': 'string(default="DEBUG")',
-            'propagate': 'boolean(default=False)'
-        },
-
         exceptions={
             'simplified': 'boolean(default=True, help="Don\'t display the first Nagare internal call frames")',
             'conservative': 'boolean(default=True, help="")',
             'reverse': 'boolean(default=False, help="Display the call frames in reverse order (last called frame fist)")',
             'align': 'boolean(default=True, help="align the fields of the call frames")',
             'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")'
+        },
+
+        logger={
+            'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
+            'handlers': 'string_list(default=list(), help="list of handlers to use")',
+            '___many___': 'string'
+        },
+        handler={},
+        formatter={},
+
+        __many__={
+            'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
+            'handlers': 'string_list(default=list(), help="list of handlers to use")'
+        },
+
+        loggers={
+            'root': {
+                'qualname': 'string(default="root")',
+                'level': 'string(default="INFO")',
+                'handlers': 'string_list(default=list(root), help="list of handlers to use")'
+            },
+            '__many__': {
+                'qualname': 'string',
+                'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
+                'handlers': 'string_list(default=list(), help="list of handlers to use")'
+            }
+        },
+        handlers={
+            'root': {
+                'class': 'string(default="nagare.services.logging.DefaultColorizingStreamHandler")',
+                'formatter': 'string(default="root")'
+            },
+            '__many__': {}
+        },
+        formatters={
+            'root': {
+                'class': 'string(default="nagare.services.logging.ColorizingFormatter")',
+                'format': 'string(default="{}")'.format(DEFAULT_FORMAT)
+            },
+            '__many__': {}
         }
     )
 
@@ -230,107 +293,70 @@ class Logger(plugin.Plugin):
             name, dist,
             _app_name,
             style, styles,
-            logger, handler, formatter,
             exceptions,
+            logger, handler, formatter,
+            loggers, handlers, formatters,
             **sections
     ):
         super(Logger, self).__init__(
             name, dist,
             style=style, styles=styles,
-            logger=logger, handler=handler, formatter=formatter,
             exceptions=exceptions,
+            logger=logger, handler=handler, formatter=formatter,
+            loggers=loggers, handlers=handlers, formatters=formatters,
             **sections
         )
         colorama.init(autoreset=True)
 
+        DefaultColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
+
         colors = (styles.get(style) or STYLES.get(style) or STYLES['nocolors']).copy()
         colors = {name: ''.join(COLORS.get(c.upper(), '') for c in color) for name, color in colors.items()}
+        DefaultColorizingStreamHandler.CONFIG['colors'] = colors
 
         configurator = DictConfigurator()
 
-        # Application logger
-        # ------------------
-
         logger_name = 'nagare.application.' + _app_name
         log.set_logger(logger_name)
-
-        logger['level'] = logger['level'] or 'ERROR'
-
-        if handler['class']:
-            handler['()'] = configurator.create_handler
-        else:
-            handler.setdefault('stream', 'ext://sys.stderr')
-
-            if 'class' not in formatter:
-                del handler['class']
-                handler['()'] = lambda stream: ColorizingStreamHandler(
-                    stream,
-                    colorizer.GenericColorizer(
-                        {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
-                    )
-                )
-
-                formatter['class'] = 'chromalog.ColorizingFormatter'
-            else:
-                handler['class'] = 'logging.StreamHandler'
-
-        loggers = {logger_name: dict(logger, handlers=[logger_name])}
-        handlers = {logger_name: dict(handler, formatter=logger_name)}
-        formatters = {logger_name: formatter}
 
         # Other loggers
         # -------------
 
         for name, config in sections.items():
-            if name.startswith('logger_'):
-                name = config.pop('qualname')
-                if name.startswith('.'):
-                    name = logger_name + name
+            if '_' in name:
+                category, name = name.split('_', 1)
+                if category == 'logger':
+                    loggers[name] = config
 
-                if name == 'root':
-                    name = ''
+                elif category == 'handler':
+                    del config['propagate']
+                    del config['handlers']
+                    handlers[name] = config
 
-                config['propagate'] = config.get('propagate', '1') == '1'
+                elif category == 'formatter':
+                    del config['propagate']
+                    del config['handlers']
+                    formatters[name] = config
 
-                handler = config.get('handlers')
-                if handler:
-                    config['handlers'] = handler.split(',')
+        loggers = {self.absolute_qualname(logger_name, logger.pop('qualname')): logger for logger in loggers.values()}
+        for handler_config in handlers.values():
+            handler_config['()'] = configurator.create_handler
 
-                loggers[name] = config
+        # Application logger
+        # ------------------
 
-            if name.startswith('handler_'):
-                handlers[name[8:]] = config
-                handlers[name[8:]]['()'] = configurator.create_handler
+        if logger_name not in loggers:
+            formatters[logger_name] = formatter
 
-            if name.startswith('formatter_'):
-                formatters[name[10:]] = config
+            if handler:
+                handler.setdefault('()', configurator.create_handler)
+                if formatter:
+                    handler['formatter'] = logger_name
 
-        # Root logger
-        # -----------
+                handlers[logger_name] = handler
+                logger['handlers'] = [logger_name]
 
-        root = loggers.get('', {})
-        root.setdefault('level', 'INFO')
-
-        if 'handlers' not in root:
-            root['handlers'] = ['_root_handler']
-
-            handlers['_root_handler'] = {
-                'stream': 'ext://sys.stderr',
-                'formatter': '_root_formatter',
-                '()': lambda stream: ColorizingStreamHandler(
-                    stream,
-                    colorizer.GenericColorizer(
-                        {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
-                    )
-                )
-            }
-
-            formatters['_root_formatter'] = {
-                'class': 'chromalog.ColorizingFormatter',
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            }
-
-        loggers[''] = root
+            loggers[logger_name] = logger
 
         logging_config = {
             'version': 1,
@@ -342,20 +368,12 @@ class Logger(plugin.Plugin):
 
         configurator.configure(logging_config)
 
-        # Colorized exceptions
-        # --------------------
-
-        exception_logger = logging.getLogger('nagare.services.exceptions')
-        if style and not exception_logger.handlers:
-            handler = self.create_exception_handler(colors, **exceptions)
-            exception_logger.addHandler(handler)
-
     @staticmethod
-    def create_exception_handler(colors, simplified, conservative, reverse, align, keep_path, **styles):
-        colors = {
-            category: (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
-            for category, color
-            in colors.items()
-        }
+    def absolute_qualname(app_logger_name, qualname):
+        if qualname.startswith('.'):
+            qualname = app_logger_name + ('' if qualname == '.' else qualname)
 
-        return ColorizingExceptionHandler(colors, simplified, conservative, reverse, align, keep_path)
+        if qualname == 'root':
+            qualname = ''
+
+        return qualname
