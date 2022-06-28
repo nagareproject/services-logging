@@ -256,6 +256,7 @@ class Logger(plugin.Plugin):
         formatter={},
 
         __many__={
+            'level': 'string(default="INFO")',
             'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
             'handlers': 'string_list(default=list(), help="list of handlers to use")'
         },
@@ -298,14 +299,6 @@ class Logger(plugin.Plugin):
             loggers, handlers, formatters,
             **sections
     ):
-        super(Logger, self).__init__(
-            name, dist,
-            style=style, styles=styles,
-            exceptions=exceptions,
-            logger=logger, handler=handler, formatter=formatter,
-            loggers=loggers, handlers=handlers, formatters=formatters,
-            **sections
-        )
         colorama.init(autoreset=True)
 
         DefaultColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
@@ -329,16 +322,12 @@ class Logger(plugin.Plugin):
                     loggers[name] = config
 
                 elif category == 'handler':
-                    del config['propagate']
-                    del config['handlers']
-                    handlers[name] = config
+                    handlers[name] = {k: v for k, v in config.items() if k not in {'level', 'propagate', 'handlers'}}
 
                 elif category == 'formatter':
-                    del config['propagate']
-                    del config['handlers']
-                    formatters[name] = config
+                    formatters[name] = {k: v for k, v in config.items() if k not in {'level', 'propagate', 'handlers'}}
 
-        loggers = {self.absolute_qualname(logger_name, logger.pop('qualname')): logger for logger in loggers.values()}
+        loggers = {self.absolute_qualname(logger_name, logger['qualname']): logger for logger in loggers.values()}
         for handler_config in handlers.values():
             handler_config['()'] = configurator.create_handler
 
@@ -346,6 +335,7 @@ class Logger(plugin.Plugin):
         # ------------------
 
         if logger_name not in loggers:
+            logger['qualname'] = logger_name
             formatters[logger_name] = formatter
 
             if handler:
@@ -367,6 +357,17 @@ class Logger(plugin.Plugin):
         }
 
         configurator.configure(logging_config)
+
+        for handler in handlers.values():
+            del handler['()']
+        loggers['root'] = loggers.pop('')
+
+        super(Logger, self).__init__(
+            name, dist,
+            style=style, styles=styles,
+            exceptions=exceptions,
+            loggers=loggers, handlers=handlers, formatters=formatters
+        )
 
     @staticmethod
     def absolute_qualname(app_logger_name, qualname):
