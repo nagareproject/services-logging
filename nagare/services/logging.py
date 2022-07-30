@@ -136,49 +136,52 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
         else:
             exc_type, exc_value, exc_tb = record.exc_info
 
-            record.exc_info = None
-            super(ColorizingStreamHandler, self).emit(record)
+            if exc_type is SyntaxError:
+                super(ColorizingStreamHandler, self).emit(record)
+            else:
+                record.exc_info = None
+                super(ColorizingStreamHandler, self).emit(record)
 
-            tb = last_chain_seen = exc_tb
-            while self.simplified and tb:
-                func_name = tb.tb_frame.f_code.co_name
-                tb = tb.tb_next
-                if (tb is not None) and (func_name == 'handle_request'):
-                    last_chain_seen = tb
+                tb = last_chain_seen = exc_tb
+                while self.simplified and tb:
+                    func_name = tb.tb_frame.f_code.co_name
+                    tb = tb.tb_next
+                    if (tb is not None) and (func_name == 'handle_request'):
+                        last_chain_seen = tb
 
-            if not last_chain_seen:
-                last_chain_seen = exc_tb
+                if not last_chain_seen:
+                    last_chain_seen = exc_tb
 
-            tb = []
-            for entry in traceback.extract_tb(last_chain_seen):
-                filename = entry[0].split(path.sep)
-                filename = path.sep.join(filename[-self.keep_path or None:])
-                tb.append((filename,) + entry[1:])
+                tb = []
+                for entry in traceback.extract_tb(last_chain_seen):
+                    filename = entry[0].split(path.sep)
+                    filename = path.sep.join(filename[-self.keep_path or None:])
+                    tb.append((filename,) + entry[1:])
 
-            parser = backtrace._Hook(
-                reversed(tb) if self.reverse else tb,
-                self.align,
-                conservative=self.conservative
-            )
+                parser = backtrace._Hook(
+                    reversed(tb) if self.reverse else tb,
+                    self.align,
+                    conservative=self.conservative
+                )
 
-            trace = parser.generate_backtrace(self.style)
+                trace = parser.generate_backtrace(self.style)
 
-            type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
-            tb_message = self.style['backtrace'].format('Traceback ({}):'.format(
-                'Most recent call ' + ('first' if self.reverse else 'last')
-            ))
-            err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
+                type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
+                tb_message = self.style['backtrace'].format('Traceback ({}):'.format(
+                    'Most recent call ' + ('first' if self.reverse else 'last')
+                ))
+                err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
 
-            self.stream.write(tb_message + '\n')
-            if self.reverse:
-                self.stream.write(err_message + '\n')
+                self.stream.write(tb_message + '\n')
+                if self.reverse:
+                    self.stream.write(err_message + '\n')
 
-            self.stream.write('\n'.join(line.rstrip() for line in trace) + '\n')
+                self.stream.write('\n'.join(line.rstrip() for line in trace) + '\n')
 
-            if not self.reverse:
-                self.stream.write(err_message + '\n')
+                if not self.reverse:
+                    self.stream.write(err_message + '\n')
 
-            self.flush()
+                self.flush()
 
 
 class DefaultColorizingStreamHandler:
