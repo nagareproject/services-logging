@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -9,18 +9,17 @@
 
 from __future__ import absolute_import
 
-import sys
 import logging
 import logging.config
-import traceback
 from os import path
+import sys
+import traceback
 
-import colorama
 import chromalog
 from chromalog import ColorizingFormatter  # noqa: F401
-
+import colorama
 from nagare import log
-from nagare.services import plugin, backtrace
+from nagare.services import backtrace, plugin
 
 COLORS = {'': ''}
 COLORS.update(colorama.Fore.__dict__)
@@ -34,12 +33,11 @@ STYLES = {
         'warning': [],
         'error': [],
         'critical': [],
-
         'backtrace': [],
         'line': [],
         'module': [],
         'context': [],
-        'call': []
+        'call': [],
     },
     'light': {
         'debug': ['GREEN'],
@@ -47,13 +45,11 @@ STYLES = {
         'warning': ['YELLOW'],
         'error': ['BRIGHT', 'RED'],
         'critical': ['BACK_RED', 'BRIGHT', 'WHITE'],
-
         'backtrace': ['YELLOW'],
         'line': ['YELLOW'],
         'module': [],
         'context': ['GREEN'],
         'call': [],
-
     },
     'dark': {
         'debug': ['DIM', 'GREEN'],
@@ -61,27 +57,24 @@ STYLES = {
         'warning': ['DIM', 'YELLOW'],
         'error': ['RED'],
         'critical': ['BACK_RED', 'WHITE'],
-
         'backtrace': ['YELLOW'],
         'line': ['YELLOW'],
         'module': [],
         'context': ['GREEN'],
-        'call': []
-    }
+        'call': [],
+    },
 }
 
 CATEGORIES = [
-    {
-        'call': '%s-> ' + COLORS['BRIGHT']
-    },
+    {'call': '%s-> ' + COLORS['BRIGHT']},
     {
         'backtrace': '%s',
         'error': '%s',
         'line': 'at line %s',
         'module': 'File %s',
         'context': 'in %s',
-        'call': '%s-> ' + COLORS['BRIGHT']
-    }
+        'call': '%s-> ' + COLORS['BRIGHT'],
+    },
 ]
 
 DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -98,22 +91,16 @@ DefaultColorizingStreamHandler = None
 
 
 class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
-
     def __init__(
-        self,
-        stream=sys.stderr,
-        colors=None,
-        simplified=True, conservative=True, reverse=False, align=True, keep_path=2
+        self, stream=sys.stderr, colors=None, simplified=True, conservative=True, reverse=False, align=True, keep_path=2
     ):
         colors = colors or {}
 
         super(ColorizingStreamHandler, self).__init__(
             stream,
-            chromalog.colorizer.MonochromaticColorizer({
-                name: (color, COLORS['RESET_ALL'])
-                for name, color
-                in colors.items()
-            })
+            chromalog.colorizer.MonochromaticColorizer(
+                {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
+            ),
         )
 
         self.simplified = simplified
@@ -124,8 +111,7 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
 
         self.style = {
             category: (CATEGORIES[conservative].get(category, '%s') % color) + '{}'
-            for category, color
-            in colors.items()
+            for category, color in colors.items()
             if category in CATEGORIES[1]
         }
 
@@ -155,21 +141,19 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                 tb = []
                 for entry in traceback.extract_tb(last_chain_seen):
                     filename = entry[0].split(path.sep)
-                    filename = path.sep.join(filename[-self.keep_path or None:])
+                    filename = path.sep.join(filename[-self.keep_path or None :])
                     tb.append((filename,) + entry[1:])
 
                 parser = backtrace._Hook(
-                    reversed(tb) if self.reverse else tb,
-                    self.align,
-                    conservative=self.conservative
+                    reversed(tb) if self.reverse else tb, self.align, conservative=self.conservative
                 )
 
                 trace = parser.generate_backtrace(self.style)
 
                 type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
-                tb_message = self.style['backtrace'].format('Traceback ({}):'.format(
-                    'Most recent call ' + ('first' if self.reverse else 'last')
-                ))
+                tb_message = self.style['backtrace'].format(
+                    'Traceback ({}):'.format('Most recent call ' + ('first' if self.reverse else 'last'))
+                )
                 err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
 
                 self.stream.write(tb_message + '\n')
@@ -224,7 +208,6 @@ class Logger(plugin.Plugin):
     CONFIG_SPEC = dict(
         plugin.Plugin.CONFIG_SPEC,
         _app_name='string(default="$app_name")',
-
         style='string(default=nocolors, help="color theme")',
         styles={
             '__many__': {
@@ -233,74 +216,75 @@ class Logger(plugin.Plugin):
                 'warning': 'string_list(default=list(), help="color for the ``warning`` level log messages")',
                 'error': 'string_list(default=list(), help="color for the ``error`` level log messages")',
                 'critical': 'string_list(default=list(), help="color for the ``critical`` level log messages")',
-
                 'backtrace': 'string_list(default=list())',
                 'line': 'string_list(default=list())',
                 'module': 'string_list(default=list())',
                 'context': 'string_list(default=list())',
-                'call': 'string_list(default=list())'
+                'call': 'string_list(default=list())',
             }
         },
-
         exceptions={
             'simplified': 'boolean(default=True, help="Don\'t display the first Nagare internal call frames")',
             'conservative': 'boolean(default=True, help="")',
             'reverse': 'boolean(default=False, help="Display the call frames in reverse order (last called frame fist)")',
             'align': 'boolean(default=True, help="align the fields of the call frames")',
-            'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")'
+            'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")',
         },
-
         logger={
             'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
             'handlers': 'string_list(default=list(), help="list of handlers to use")',
-            '___many___': 'string'
+            '___many___': 'string',
         },
         handler={},
         formatter={},
-
         __many__={
             'level': 'string(default="INFO")',
             'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
-            'handlers': 'string_list(default=list(), help="list of handlers to use")'
+            'handlers': 'string_list(default=list(), help="list of handlers to use")',
         },
-
         loggers={
             'root': {
                 'qualname': 'string(default="root")',
                 'level': 'string(default="INFO")',
-                'handlers': 'string_list(default=list(root), help="list of handlers to use")'
+                'handlers': 'string_list(default=list(root), help="list of handlers to use")',
             },
             '__many__': {
                 'qualname': 'string',
                 'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
-                'handlers': 'string_list(default=list(), help="list of handlers to use")'
-            }
+                'handlers': 'string_list(default=list(), help="list of handlers to use")',
+            },
         },
         handlers={
             'root': {
                 'class': 'string(default="nagare.services.logging.DefaultColorizingStreamHandler")',
-                'formatter': 'string(default="root")'
+                'formatter': 'string(default="root")',
             },
-            '__many__': {}
+            '__many__': {},
         },
         formatters={
             'root': {
                 'class': 'string(default="nagare.services.logging.ColorizingFormatter")',
-                'format': 'string(default="{}")'.format(DEFAULT_FORMAT)
+                'format': 'string(default="{}")'.format(DEFAULT_FORMAT),
             },
-            '__many__': {}
-        }
+            '__many__': {},
+        },
     )
 
     def __init__(
-            self,
-            name, dist,
-            _app_name,
-            style, styles,
-            exceptions,
-            logger, handler, formatter,
-            loggers, handlers, formatters,
-            **sections
+        self,
+        name,
+        dist,
+        _app_name,
+        style,
+        styles,
+        exceptions,
+        logger,
+        handler,
+        formatter,
+        loggers,
+        handlers,
+        formatters,
+        **sections,
     ):
         colorama.init(autoreset=True)
 
@@ -351,13 +335,7 @@ class Logger(plugin.Plugin):
 
             loggers[logger_name] = logger
 
-        logging_config = {
-            'version': 1,
-
-            'loggers': loggers,
-            'handlers': handlers,
-            'formatters': formatters
-        }
+        logging_config = {'version': 1, 'loggers': loggers, 'handlers': handlers, 'formatters': formatters}
 
         configurator.configure(logging_config)
 
@@ -366,10 +344,14 @@ class Logger(plugin.Plugin):
         loggers['root'] = loggers.pop('')
 
         super(Logger, self).__init__(
-            name, dist,
-            style=style, styles=styles,
+            name,
+            dist,
+            style=style,
+            styles=styles,
             exceptions=exceptions,
-            loggers=loggers, handlers=handlers, formatters=formatters
+            loggers=loggers,
+            handlers=handlers,
+            formatters=formatters,
         )
 
     @staticmethod

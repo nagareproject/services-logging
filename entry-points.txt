@@ -1,0 +1,2 @@
+[nagare.services]
+logging = nagare.services.logging:Logger

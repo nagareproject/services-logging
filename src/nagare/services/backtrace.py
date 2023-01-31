@@ -14,20 +14,19 @@
 
 # This file is from https://github.com/nir0s/backtrace
 
+import argparse
 import os
 import sys
-import argparse
 import traceback
 
 import colorama
 from colorama import Fore, Style
 
-
-DESCRIPTION = """Beautify Tracebacks.
+DESCRIPTION = '''Beautify Tracebacks.
 
 Just pipe stderr into backtrace like so:
   `python bad-program.py 2>&1 | backtrace`
-"""
+'''
 
 TRACEBACK_IDENTIFIER = 'Traceback (most recent call last):\n'
 STYLES = {
@@ -55,11 +54,7 @@ def _flush(message):
 
 
 class _Hook(object):
-    def __init__(self,
-                 entries,
-                 align=False,
-                 strip_path=False,
-                 conservative=False):
+    def __init__(self, entries, align=False, strip_path=False, conservative=False):
         self.entries = entries
         self.align = align
         self.strip = strip_path
@@ -79,7 +74,7 @@ class _Hook(object):
             styles['line'].format(entry[1]) + Style.RESET_ALL,
             styles['module'].format(entry[0]) + Style.RESET_ALL,
             styles['context'].format(entry[2]) + Style.RESET_ALL,
-            styles['call'].format(entry[3]) + Style.RESET_ALL
+            styles['call'].format(entry[3]) + Style.RESET_ALL,
         ]
         if self.conservative:
             new_entry[0], new_entry[1] = new_entry[1], new_entry[0]
@@ -97,12 +92,10 @@ class _Hook(object):
 
     @staticmethod
     def align_entry(entry, lengths):
-        return ' '.join(
-            ['{0:{1}}'.format(field, lengths[index])
-             for index, field in enumerate(entry)])
+        return ' '.join(['{0:{1}}'.format(field, lengths[index]) for index, field in enumerate(entry)])
 
     def generate_backtrace(self, styles):
-        """Return the (potentially) aligned, rebuit traceback
+        """Return the (potentially) aligned, rebuit traceback.
 
         Yes, we iterate over the entries thrice. We sacrifice
         performance for code readability. I mean.. come on, how long can
@@ -121,16 +114,18 @@ class _Hook(object):
         return aligned_backtrace
 
 
-def hook(reverse=False,
-         align=False,
-         strip_path=False,
-         enable_on_envvar_only=False,
-         on_tty=False,
-         conservative=False,
-         styles=None,
-         tb=None,
-         tpe=None,
-         value=None):
+def hook(
+    reverse=False,
+    align=False,
+    strip_path=False,
+    enable_on_envvar_only=False,
+    on_tty=False,
+    conservative=False,
+    styles=None,
+    tb=None,
+    tpe=None,
+    value=None,
+):
     """Hook the current excepthook to the backtrace.
 
     If `align` is True, all parts (line numbers, file names, etc..) will be
@@ -163,7 +158,7 @@ def hook(reverse=False,
         styles = CONVERVATIVE_STYLES
         align = align or False
     elif styles:
-        for k in STYLES.keys():
+        for k in STYLES:
             styles[k] = styles.get(k, STYLES[k])
     else:
         styles = STYLES
@@ -181,8 +176,9 @@ def hook(reverse=False,
         parser = _Hook(traceback_entries, align, strip_path, conservative)
 
         tpe = tpe if isinstance(tpe, str) else tpe.__name__
-        tb_message = styles['backtrace'].format('Traceback ({0}):'.format(
-            'Most recent call ' + ('first' if reverse else 'last')))
+        tb_message = styles['backtrace'].format(
+            'Traceback ({0}):'.format('Most recent call ' + ('first' if reverse else 'last'))
+        )
         err_message = styles['error'].format(tpe + ': ' + str(value))
 
         if reverse:
@@ -201,14 +197,12 @@ def hook(reverse=False,
 
 
 def unhook():
-    """Restore the default excepthook
-    """
+    """Restore the default excepthook."""
     sys.excepthook = sys.__excepthook__
 
 
 def _extract_traceback(text):
-    """Receive a list of strings representing the input from stdin and return
-    the restructured backtrace.
+    """Receive a list of strings representing the input from stdin and return the restructured backtrace.
 
     This iterates over the output and once it identifies a hopefully genuine
     identifier, it will start parsing output.
@@ -272,9 +266,7 @@ def _stdin_hook(args):
     output = sys.stdin.readlines()
 
     if TRACEBACK_IDENTIFIER not in output:
-        sys.exit(
-            'No Traceback detected. Make sure you pipe stderr to '
-            'backtrace correctly.')
+        sys.exit('No Traceback detected. Make sure you pipe stderr to backtrace correctly.')
 
     tb, all_else = _extract_traceback(output)
     sys.stdout.write(''.join(all_else))
@@ -286,50 +278,32 @@ def _stdin_hook(args):
         conservative=args.conservative,
         tpe=tpe,
         value=value,
-        tb=tb
+        tb=tb,
     )
 
 
 def _add_reverse_argument(parser):
-    parser.add_argument(
-        '-r',
-        '--reverse',
-        action='store_true',
-        help='Reverse traceback entry order')
+    parser.add_argument('-r', '--reverse', action='store_true', help='Reverse traceback entry order')
     return parser
 
 
 def _add_align_argument(parser):
-    parser.add_argument(
-        '-a',
-        '--align',
-        action='store_true',
-        help='Right-align the backtrace')
+    parser.add_argument('-a', '--align', action='store_true', help='Right-align the backtrace')
     return parser
 
 
 def _add_strip_path_argument(parser):
-    parser.add_argument(
-        '-s',
-        '--strip-path',
-        action='store_true',
-        help='Strip the path to the module')
+    parser.add_argument('-s', '--strip-path', action='store_true', help='Strip the path to the module')
     return parser
 
 
 def _add_conservative_argument(parser):
-    parser.add_argument(
-        '-c',
-        '--conservative',
-        action='store_true',
-        help='Activate conservative mode')
+    parser.add_argument('-c', '--conservative', action='store_true', help='Activate conservative mode')
     return parser
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description=DESCRIPTION,
-        formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
     parser = _add_reverse_argument(parser)
     parser = _add_align_argument(parser)
     parser = _add_strip_path_argument(parser)
