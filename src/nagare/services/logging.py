@@ -168,7 +168,7 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                 self.flush()
 
 
-class DefaultColorizingStreamHandler:
+class _DefaultColorizingStreamHandler:
     CONFIG = {}
 
     def __new__(cls, *args, **kw):
@@ -286,13 +286,17 @@ class Logger(plugin.Plugin):
         formatters,
         **sections,
     ):
+        global DefaultColorizingStreamHandler
+
         colorama.init(autoreset=True)
 
-        DefaultColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
+        _DefaultColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
 
         colors = (styles.get(style) or STYLES.get(style) or STYLES['nocolors']).copy()
         colors = {name: ''.join(COLORS.get(c.upper(), '') for c in color) for name, color in colors.items()}
-        DefaultColorizingStreamHandler.CONFIG['colors'] = colors
+        _DefaultColorizingStreamHandler.CONFIG['colors'] = colors
+
+        DefaultColorizingStreamHandler = _DefaultColorizingStreamHandler if style else logging.StreamHandler
 
         configurator = DictConfigurator()
 
