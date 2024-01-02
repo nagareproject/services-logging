@@ -14,19 +14,19 @@
 
 # This file is from https://github.com/nir0s/backtrace
 
-import argparse
 import os
 import sys
+import argparse
 import traceback
 
 import colorama
 from colorama import Fore, Style
 
-DESCRIPTION = '''Beautify Tracebacks.
+DESCRIPTION = """Beautify Tracebacks.
 
 Just pipe stderr into backtrace like so:
   `python bad-program.py 2>&1 | backtrace`
-'''
+"""
 
 TRACEBACK_IDENTIFIER = 'Traceback (most recent call last):\n'
 STYLES = {
@@ -70,6 +70,14 @@ class _Hook(object):
         # Always an int (entry line number)
         entry[1] = str(entry[1])
 
+        if entry[5]:
+            entry[3] = (
+                entry[3][: entry[4]]
+                + styles['backtrace'].format(entry[3][entry[4] : entry[5]])
+                + Style.RESET_ALL
+                + entry[3][entry[5] :]
+            )
+
         new_entry = [
             styles['line'].format(entry[1]) + Style.RESET_ALL,
             styles['module'].format(entry[0]) + Style.RESET_ALL,
@@ -111,6 +119,7 @@ class _Hook(object):
         aligned_backtrace = []
         for entry in backtrace:
             aligned_backtrace.append(self.align_entry(entry, lengths))
+
         return aligned_backtrace
 
 

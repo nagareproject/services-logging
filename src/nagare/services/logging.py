@@ -9,17 +9,17 @@
 
 from __future__ import absolute_import
 
+import sys
 import logging
+import traceback
 import logging.config
 from os import path
-import sys
-import traceback
 
-import chromalog
-from chromalog import ColorizingFormatter  # noqa: F401
 import colorama
+import chromalog
 from nagare import log
-from nagare.services import backtrace, plugin
+from chromalog import ColorizingFormatter  # noqa: F401
+from nagare.services import plugin, backtrace
 
 COLORS = {'': ''}
 COLORS.update(colorama.Fore.__dict__)
@@ -140,9 +140,17 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
 
                 tb = []
                 for entry in traceback.extract_tb(last_chain_seen):
-                    filename = entry[0].split(path.sep)
+                    filename = entry.filename.split(path.sep)
                     filename = path.sep.join(filename[-self.keep_path or None :])
-                    tb.append((filename,) + entry[1:])
+
+                    if hasattr(entry, 'colno'):
+                        nb_stripped_spaces = len(entry._original_line) - len(entry._original_line.lstrip())
+                        colno = entry.colno - nb_stripped_spaces
+                        end_colno = entry.end_colno - nb_stripped_spaces
+                    else:
+                        colno = end_colno = None
+
+                    tb.append((filename, entry.lineno, entry.name, entry.line, colno, end_colno))
 
                 parser = backtrace._Hook(
                     reversed(tb) if self.reverse else tb, self.align, conservative=self.conservative
@@ -196,7 +204,7 @@ class DictConfigurator(logging.config.dictConfigClass):
             if isinstance(address, (list, tuple)):
                 kw['address'] = (address[0], int(address[1]))
 
-        return cls(**kw) if kw else cls(*eval(args))
+        return cls(**kw) if kw else cls(*eval(args))  # noqa: S307
 
     def configure(self, config):
         super(DictConfigurator, self).__init__(config)
