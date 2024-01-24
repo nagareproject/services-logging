@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2023 Net-ng.
+# Copyright (c) 2008-2024 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -17,8 +17,9 @@ from os import path
 
 import colorama
 import chromalog
-from nagare import log
 from chromalog import ColorizingFormatter  # noqa: F401
+
+from nagare import log
 from nagare.services import plugin, backtrace
 
 COLORS = {'': ''}
@@ -144,9 +145,11 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                     filename = path.sep.join(filename[-self.keep_path or None :])
 
                     if hasattr(entry, 'colno'):
-                        nb_stripped_spaces = len(entry._original_line) - len(entry._original_line.lstrip())
+                        nb_stripped_spaces = len(entry._original_line) - len(entry.line) - 1
                         colno = entry.colno - nb_stripped_spaces
-                        end_colno = entry.end_colno - nb_stripped_spaces
+                        end_colno = (
+                            entry.end_colno if entry.lineno == entry.end_lineno else len(entry._original_line)
+                        ) - nb_stripped_spaces
                     else:
                         colno = end_colno = None
 
