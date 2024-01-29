@@ -86,7 +86,7 @@ DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logging._srcfile = __file__[:-1] if __file__.endswith(('.pyc', '.pyo')) else __file__
 logging.addLevelName(10000, 'NONE')
 
-DefaultColorizingStreamHandler = None
+StreamHandler = None
 
 # -----------------------------------------------------------------------------
 
@@ -179,7 +179,7 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                 self.flush()
 
 
-class _DefaultColorizingStreamHandler:
+class _ColorizingStreamHandler:
     CONFIG = {}
 
     def __new__(cls, *args, **kw):
@@ -267,14 +267,14 @@ class Logger(plugin.Plugin):
         },
         handlers={
             'root': {
-                'class': 'string(default="nagare.services.logging.DefaultColorizingStreamHandler")',
+                'class': 'string(default="nagare.logging.StreamHandler")',
                 'formatter': 'string(default="root")',
             },
             '__many__': {},
         },
         formatters={
             'root': {
-                'class': 'string(default="nagare.services.logging.ColorizingFormatter")',
+                'class': 'string(default="nagare.logging.Formatter")',
                 'format': 'string(default="{}")'.format(DEFAULT_FORMAT),
             },
             '__many__': {},
@@ -297,17 +297,17 @@ class Logger(plugin.Plugin):
         formatters,
         **sections,
     ):
-        global DefaultColorizingStreamHandler
+        global StreamHandler
 
         colorama.init(autoreset=True)
 
-        _DefaultColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
+        _ColorizingStreamHandler.CONFIG = {k: v for k, v in exceptions.items() if not isinstance(v, dict)}
 
         colors = (styles.get(style) or STYLES.get(style) or STYLES['nocolors']).copy()
         colors = {name: ''.join(COLORS.get(c.upper(), '') for c in color) for name, color in colors.items()}
-        _DefaultColorizingStreamHandler.CONFIG['colors'] = colors
+        _ColorizingStreamHandler.CONFIG['colors'] = colors
 
-        DefaultColorizingStreamHandler = _DefaultColorizingStreamHandler if style else logging.StreamHandler
+        StreamHandler = _ColorizingStreamHandler if style else logging.StreamHandler
 
         configurator = DictConfigurator()
 
