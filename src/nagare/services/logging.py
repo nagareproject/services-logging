@@ -9,8 +9,10 @@
 
 from __future__ import absolute_import
 
+import os
 import sys
 import logging
+import warnings as warnings_modules
 import traceback
 import logging.config
 from os import path
@@ -234,6 +236,7 @@ class Logger(plugin.Plugin):
                 'call': 'string_list(default=list())',
             }
         },
+        warnings='string_list(default=list())',
         exceptions={
             'simplified': 'boolean(default=True, help="Don\'t display the first Nagare internal call frames")',
             'conservative': 'boolean(default=True, help="")',
@@ -288,6 +291,7 @@ class Logger(plugin.Plugin):
         _app_name,
         style,
         styles,
+        warnings,
         exceptions,
         logger,
         handler,
@@ -308,6 +312,19 @@ class Logger(plugin.Plugin):
         _ColorizingStreamHandler.CONFIG['colors'] = colors
 
         StreamHandler = _ColorizingStreamHandler if style else logging.StreamHandler
+
+        if not sys.warnoptions:
+            warnings_modules._processoptions(warnings)
+
+        warnings_modules.formatwarning = (
+            lambda message, category, filename, lineno, line=None: '{} at {} line {}: {}'.format(
+                category.__name__,
+                os.sep.join(filename.split(os.sep)[-exceptions['keep_path'] or None :]),
+                lineno,
+                message,
+            )
+        )
+        logging.captureWarnings(True)
 
         configurator = DictConfigurator()
 
@@ -363,6 +380,7 @@ class Logger(plugin.Plugin):
             dist,
             style=style,
             styles=styles,
+            warnings=warnings,
             exceptions=exceptions,
             loggers=loggers,
             handlers=handlers,
