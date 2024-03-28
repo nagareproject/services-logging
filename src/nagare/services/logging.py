@@ -146,14 +146,15 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                     filename = entry.filename.split(path.sep)
                     filename = path.sep.join(filename[-self.keep_path or None :])
 
-                    if hasattr(entry, 'colno'):
+                    colno = getattr(entry, 'colno', None)
+                    if colno is None:
+                        end_colno = None
+                    else:
                         nb_stripped_spaces = len(entry._original_line) - len(entry.line) - 1
-                        colno = entry.colno - nb_stripped_spaces
+                        colno -= nb_stripped_spaces
                         end_colno = (
                             entry.end_colno if entry.lineno == entry.end_lineno else len(entry._original_line)
                         ) - nb_stripped_spaces
-                    else:
-                        colno = end_colno = None
 
                     tb.append((filename, entry.lineno, entry.name, entry.line, colno, end_colno))
 

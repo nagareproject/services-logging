@@ -13,5 +13,5 @@ tests:
   script:
     - pip3 install ruff pytest .
     - ruff format --check src
-    - ruff src
+    - ruff check src
     - pytest
