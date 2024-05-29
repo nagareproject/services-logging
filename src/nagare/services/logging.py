@@ -150,7 +150,9 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                     if colno is None:
                         end_colno = None
                     else:
-                        original_lines = getattr(entry, '_original_line', None) or entry._original_lines
+                        original_lines = (
+                            entry._original_line if hasattr(entry, '_original_line') else entry._original_lines
+                        )
                         original_len = len(original_lines.split('\n', 1)[0])
                         nb_stripped_spaces = original_len - len(entry.line)
                         colno -= nb_stripped_spaces

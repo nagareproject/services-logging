@@ -13,6 +13,7 @@ install: clean
 	python -m pip install -e '.[dev']
 	git init
 	python -m pre_commit install
+	$(MAKE) upgrade-precommit
 
 tests:
 	python -m pytest
