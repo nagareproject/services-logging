@@ -333,7 +333,7 @@ class Logger(plugin.Plugin):
 
         configurator = DictConfigurator()
 
-        logger_name = 'nagare.application.' + _app_name
+        logger_name = 'nagare.applications.' + _app_name
         log.set_logger(logger_name)
 
         # Other loggers
