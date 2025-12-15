@@ -1,13 +1,11 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
 # the file LICENSE.txt, which you should have received as part of
 # this distribution.
 # --
-
-from __future__ import absolute_import
 
 import os
 import sys
@@ -99,7 +97,7 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
     ):
         colors = colors or {}
 
-        super(ColorizingStreamHandler, self).__init__(
+        super().__init__(
             stream,
             chromalog.colorizer.MonochromaticColorizer(
                 {name: (color, COLORS['RESET_ALL']) for name, color in colors.items()}
@@ -121,15 +119,15 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
     def emit(self, record):
         isatty = getattr(self.stream, 'isatty', lambda: False)()
         if not (isatty and record.exc_info and self.style):
-            super(ColorizingStreamHandler, self).emit(record)
+            super().emit(record)
         else:
             exc_type, exc_value, exc_tb = record.exc_info
 
             if exc_type is SyntaxError:
-                super(ColorizingStreamHandler, self).emit(record)
+                super().emit(record)
             else:
                 record.exc_info = None
-                super(ColorizingStreamHandler, self).emit(record)
+                super().emit(record)
 
                 tb = last_chain_seen = exc_tb
                 while self.simplified and tb:
@@ -170,7 +168,7 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
 
                 type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
                 tb_message = self.style['backtrace'].format(
-                    'Traceback ({}):'.format('Most recent call ' + ('first' if self.reverse else 'last'))
+                    'Traceback (Most recent call {}):'.format('first' if self.reverse else 'last')
                 )
                 err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
 
@@ -190,8 +188,7 @@ class _ColorizingStreamHandler:
     CONFIG = {}
 
     def __new__(cls, *args, **kw):
-        config = cls.CONFIG.copy()
-        config.update(kw)
+        config = cls.CONFIG.copy() | kw
 
         return ColorizingStreamHandler(*args, **config)
 
@@ -217,17 +214,16 @@ class DictConfigurator(logging.config.dictConfigClass):
         return cls(**kw) if kw else cls(*eval(args))  # noqa: S307
 
     def configure(self, config):
-        super(DictConfigurator, self).__init__(config)
-        super(DictConfigurator, self).configure()
+        super().__init__(config)
+        super().configure()
 
 
 class Logger(plugin.Plugin):
     LOAD_PRIORITY = 0
-    CONFIG_SPEC = dict(
-        plugin.Plugin.CONFIG_SPEC,
-        _app_name='string(default="$app_name")',
-        style='string(default=nocolors, help="color theme")',
-        styles={
+    CONFIG_SPEC = plugin.Plugin.CONFIG_SPEC | {
+        '_app_name': 'string(default="$app_name")',
+        'style': 'string(default=nocolors, help="color theme")',
+        'styles': {
             '__many__': {
                 'debug': 'string_list(default=list(), help="color for the ``debug`` level log messages")',
                 'info': 'string_list(default=list(), help="color for the ``info`` level log messages")',
@@ -241,27 +237,27 @@ class Logger(plugin.Plugin):
                 'call': 'string_list(default=list())',
             }
         },
-        warnings='string_list(default=list())',
-        exceptions={
+        'warnings': 'string_list(default=list())',
+        'exceptions': {
             'simplified': 'boolean(default=True, help="Don\'t display the first Nagare internal call frames")',
             'conservative': 'boolean(default=True, help="")',
             'reverse': 'boolean(default=False, help="Display the call frames in reverse order (last called frame fist)")',
             'align': 'boolean(default=True, help="align the fields of the call frames")',
             'keep_path': 'integer(default=2, help="number of last filename parts to display. ``0`` to display the whole filename")',
         },
-        logger={
+        'logger': {
             'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
             'handlers': 'string_list(default=list(), help="list of handlers to use")',
             '___many___': 'string',
         },
-        handler={},
-        formatter={},
-        __many__={
+        'handler': {},
+        'formatter': {},
+        '__many__': {
             'level': 'string(default="INFO")',
             'propagate': 'boolean(default=True, help="propagate log messages to the parent logger")',
             'handlers': 'string_list(default=list(), help="list of handlers to use")',
         },
-        loggers={
+        'loggers': {
             'root': {
                 'qualname': 'string(default="root")',
                 'level': 'string(default="INFO")',
@@ -273,21 +269,21 @@ class Logger(plugin.Plugin):
                 'handlers': 'string_list(default=list(), help="list of handlers to use")',
             },
         },
-        handlers={
+        'handlers': {
             'root': {
                 'class': 'string(default="nagare.logging.StreamHandler")',
                 'formatter': 'string(default="root")',
             },
             '__many__': {},
         },
-        formatters={
+        'formatters': {
             'root': {
                 'class': 'string(default="nagare.logging.Formatter")',
                 'format': 'string(default="{}")'.format(DEFAULT_FORMAT),
             },
             '__many__': {},
         },
-    )
+    }
 
     def __init__(
         self,
@@ -380,7 +376,7 @@ class Logger(plugin.Plugin):
             del handler['()']
         loggers['root'] = loggers.pop('')
 
-        super(Logger, self).__init__(
+        super().__init__(
             name,
             dist,
             style=style,
