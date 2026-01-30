@@ -116,72 +116,99 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
             if category in CATEGORIES[1]
         }
 
+    def _print_exc(self, exc_type, exc_value, exc_tb):
+        tb = last_chain_seen = exc_tb
+        while self.simplified and tb:
+            func_name = tb.tb_frame.f_code.co_name
+            tb = tb.tb_next
+            if (tb is not None) and (func_name == 'handle_request'):
+                last_chain_seen = tb
+
+        if not last_chain_seen:
+            last_chain_seen = exc_tb
+
+        tb = []
+        for entry in traceback.extract_tb(last_chain_seen):
+            filename = entry.filename.split(path.sep)
+            filename = path.sep.join(filename[-self.keep_path or None :])
+
+            colno = getattr(entry, 'colno', None)
+            if colno is None:
+                end_colno = None
+            else:
+                original_lines = entry._original_line if hasattr(entry, '_original_line') else entry._original_lines
+                original_len = len(original_lines.split('\n', 1)[0])
+                nb_stripped_spaces = original_len - len(entry.line)
+                colno -= nb_stripped_spaces
+                end_colno = (entry.end_colno if entry.lineno == entry.end_lineno else original_len) - nb_stripped_spaces
+
+            tb.append((filename, entry.lineno, entry.name, entry.line, colno, end_colno))
+
+        if issubclass(exc_type, SyntaxError):
+            filename = exc_value.filename.split(path.sep)
+            filename = path.sep.join(filename[-self.keep_path or None :])
+
+            text = exc_value.text.lstrip()
+            original_len = len(exc_value.text)
+            nb_stripped_spaces = original_len - len(text)
+            colno = exc_value.offset - nb_stripped_spaces
+            end_colno = exc_value.end_offset - nb_stripped_spaces
+
+            tb.append((filename, exc_value.lineno or '', '', text, colno - 1, end_colno))
+
+        parser = backtrace._Hook(reversed(tb) if self.reverse else tb, self.align, conservative=self.conservative)
+        trace = parser.generate_backtrace(self.style)
+
+        type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
+        tb_message = (
+            self.style['backtrace'].format(
+                'Traceback (Most recent call {}):'.format('first' if self.reverse else 'last')
+            )
+            + COLORS['RESET_ALL']
+        )
+        err_message = self.style['error'].format(type_ + ': ' + exc_value.args[0] + COLORS['RESET_ALL'])
+
+        self.stream.write(tb_message + '\n')
+        if self.reverse:
+            self.stream.write(err_message + '\n')
+
+        self.stream.write('\n'.join(line.rstrip() for line in trace) + '\n')
+
+        if not self.reverse:
+            self.stream.write(err_message + '\n')
+
+        for note in getattr(exc_value, '__notes__', ()):
+            self.stream.write(note + '\n')
+
+        self.flush()
+
+    def print_exc(self, exc_type, exc_value, exc_tb):
+        if (cause := exc_value.__cause__) is not None:
+            self.print_exc(cause.__class__, cause, cause.__traceback__)
+            self.stream.write(traceback._cause_message)
+
+        elif ((context := exc_value.__context__) is not None) and not exc_value.__suppress_context__:
+            self.print_exc(context.__class__, context, context.__traceback__)
+            self.stream.write(traceback._context_message)
+
+        self._print_exc(exc_type, exc_value, exc_tb)
+
     def emit(self, record):
         isatty = getattr(self.stream, 'isatty', lambda: False)()
         if not (isatty and record.exc_info and self.style):
             super().emit(record)
-        else:
-            exc_type, exc_value, exc_tb = record.exc_info
+            return
 
-            if exc_type is SyntaxError:
-                super().emit(record)
-            else:
-                record.exc_info = None
-                super().emit(record)
+        exc_type, exc_value, exc_tb = record.exc_info
 
-                tb = last_chain_seen = exc_tb
-                while self.simplified and tb:
-                    func_name = tb.tb_frame.f_code.co_name
-                    tb = tb.tb_next
-                    if (tb is not None) and (func_name == 'handle_request'):
-                        last_chain_seen = tb
+        if exc_type is SyntaxError:
+            super().emit(record)
+            return
 
-                if not last_chain_seen:
-                    last_chain_seen = exc_tb
+        record.exc_info = None
+        super().emit(record)
 
-                tb = []
-                for entry in traceback.extract_tb(last_chain_seen):
-                    filename = entry.filename.split(path.sep)
-                    filename = path.sep.join(filename[-self.keep_path or None :])
-
-                    colno = getattr(entry, 'colno', None)
-                    if colno is None:
-                        end_colno = None
-                    else:
-                        original_lines = (
-                            entry._original_line if hasattr(entry, '_original_line') else entry._original_lines
-                        )
-                        original_len = len(original_lines.split('\n', 1)[0])
-                        nb_stripped_spaces = original_len - len(entry.line)
-                        colno -= nb_stripped_spaces
-                        end_colno = (
-                            entry.end_colno if entry.lineno == entry.end_lineno else original_len
-                        ) - nb_stripped_spaces
-
-                    tb.append((filename, entry.lineno, entry.name, entry.line, colno, end_colno))
-
-                parser = backtrace._Hook(
-                    reversed(tb) if self.reverse else tb, self.align, conservative=self.conservative
-                )
-
-                trace = parser.generate_backtrace(self.style)
-
-                type_ = exc_type if isinstance(exc_type, str) else exc_type.__name__
-                tb_message = self.style['backtrace'].format(
-                    'Traceback (Most recent call {}):'.format('first' if self.reverse else 'last')
-                )
-                err_message = self.style['error'].format(type_ + ': ' + repr(exc_value) + COLORS['RESET_ALL'])
-
-                self.stream.write(tb_message + '\n')
-                if self.reverse:
-                    self.stream.write(err_message + '\n')
-
-                self.stream.write('\n'.join(line.rstrip() for line in trace) + '\n')
-
-                if not self.reverse:
-                    self.stream.write(err_message + '\n')
-
-                self.flush()
+        self.print_exc(exc_type, exc_value, exc_tb)
 
 
 class _ColorizingStreamHandler:
