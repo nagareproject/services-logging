@@ -82,8 +82,7 @@ class _Hook(object):
             styles['line'].format(entry[1]) + Style.RESET_ALL,
             styles['module'].format(entry[0]) + Style.RESET_ALL,
             styles['context'].format(entry[2]) + Style.RESET_ALL,
-            styles['call'].format(entry[3]) + Style.RESET_ALL,
-        ]
+        ] + ([styles['call'].format(entry[3]) + Style.RESET_ALL] if entry[3] else [])
         if self.conservative:
             new_entry[0], new_entry[1] = new_entry[1], new_entry[0]
 
