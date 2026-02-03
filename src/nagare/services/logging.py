@@ -148,8 +148,8 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
             filename = exc_value.filename.split(path.sep)
             filename = path.sep.join(filename[-self.keep_path or None :])
 
-            text = exc_value.text.lstrip()
-            original_len = len(exc_value.text)
+            text = (exc_value.text or '').lstrip()
+            original_len = len(exc_value.text or '')
             nb_stripped_spaces = original_len - len(text)
             colno = exc_value.offset - nb_stripped_spaces
             end_colno = exc_value.end_offset - nb_stripped_spaces
