@@ -70,7 +70,7 @@ class _Hook(object):
         # Always an int (entry line number)
         entry[1] = str(entry[1])
 
-        if entry[5]:
+        if entry[5] and entry[3]:
             entry[3] = (
                 entry[3][: entry[4]]
                 + styles['backtrace'].format(entry[3][entry[4] : entry[5]])

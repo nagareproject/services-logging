@@ -152,13 +152,14 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
                 text = exc_value.text.lstrip()
                 original_len = len(exc_value.text)
                 nb_stripped_spaces = original_len - len(text)
+                text = text.rstrip()
                 colno = exc_value.offset - nb_stripped_spaces - 1
                 end_colno = exc_value.end_offset - nb_stripped_spaces
             else:
                 text = ''
                 colno = end_colno = 0
 
-            tb.append((filename, exc_value.lineno or '', '', text, colno - 1, end_colno))
+            tb.append((filename, exc_value.lineno or '', '', text, colno, end_colno))
 
         parser = backtrace._Hook(reversed(tb) if self.reverse else tb, self.align, conservative=self.conservative)
         trace = parser.generate_backtrace(self.style)
@@ -170,7 +171,12 @@ class ColorizingStreamHandler(chromalog.ColorizingStreamHandler):
             )
             + COLORS['RESET_ALL']
         )
-        err_message = self.style['error'].format(type_ + ': ' + exc_value.args[0] + COLORS['RESET_ALL'])
+
+        if not exc_value.args:
+            exc_args = ''
+        else:
+            exc_args = ': {}'.format(exc_value.args[0] if len(exc_value.args) == 1 else exc_value.args)
+        err_message = self.style['error'].format(type_ + exc_args + COLORS['RESET_ALL'])
 
         self.stream.write(tb_message + '\n')
         if self.reverse:
@@ -348,8 +354,8 @@ class Logger(plugin.Plugin):
         if not sys.warnoptions:
             warnings_modules._processoptions(warnings)
 
-        warnings_modules.formatwarning = (
-            lambda message, category, filename, lineno, line=None: '{} at {} line {}: {}'.format(
+        warnings_modules.formatwarning = lambda message, category, filename, lineno, line=None: (
+            '{} at {} line {}: {}'.format(
                 category.__name__,
                 os.sep.join(filename.split(os.sep)[-exceptions['keep_path'] or None :]),
                 lineno,
